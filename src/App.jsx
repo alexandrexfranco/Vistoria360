@@ -319,6 +319,23 @@ function App() {
               </li>
             </ul>
 
+            {orientation.debugInfo && (
+              <div
+                style={{
+                  marginTop: '15px',
+                  padding: '10px',
+                  backgroundColor: '#f0f0f0',
+                  borderRadius: '5px',
+                  fontSize: '13px',
+                  fontFamily: 'monospace',
+                  border: '1px solid #ddd',
+                }}
+              >
+                <strong>📊 Status dos Sensores:</strong>
+                <div style={{ marginTop: '5px' }}>{orientation.debugInfo}</div>
+              </div>
+            )}
+
             <h4 style={{ marginTop: '15px' }}>Ambiente:</h4>
             <ul>
               <li>

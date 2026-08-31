@@ -8,71 +8,131 @@ export const useOrientation = () => {
   });
   const [isSupported, setIsSupported] = useState(false);
   const [permissionGranted, setPermissionGranted] = useState(false);
+  const [debugInfo, setDebugInfo] = useState('');
   const handlerRef = useRef(null);
+  const motionHandlerRef = useRef(null);
+  const eventCountRef = useRef(0);
 
   // Verificar suporte no início
   useEffect(() => {
-    if ('DeviceOrientationEvent' in window) {
-      setIsSupported(true);
-    } else {
-      setIsSupported(false);
-      console.warn('DeviceOrientationEvent não suportado neste dispositivo');
-    }
+    const isOrientationSupported = 'DeviceOrientationEvent' in window;
+    const isMotionSupported = 'DeviceMotionEvent' in window;
+    
+    setIsSupported(isOrientationSupported || isMotionSupported);
+    
+    console.log('🔍 DEBUG - Suporte de sensores:');
+    console.log('  DeviceOrientationEvent:', isOrientationSupported);
+    console.log('  DeviceMotionEvent:', isMotionSupported);
+    console.log('  Protocolo:', window.location.protocol);
+    console.log('  Host:', window.location.hostname);
   }, []);
 
-  // Handler para atualizar orientação
+  // Handler para DeviceOrientationEvent
   const handleOrientation = (event) => {
-    const { alpha, beta, gamma } = event;
+    const { alpha, beta, gamma, absolute } = event;
+    eventCountRef.current++;
+    
     setOrientation({
       alpha: Math.round(alpha || 0),
       beta: Math.round(beta || 0),
       gamma: Math.round(gamma || 0),
     });
+
+    if (eventCountRef.current === 1) {
+      console.log('✓ DeviceOrientationEvent disparado! Alpha:', Math.round(alpha));
+    }
   };
 
-  // Função para solicitar permissão e ativar listener
+  // Handler para DeviceMotionEvent (fallback)
+  const handleMotion = (event) => {
+    const { rotationRate, acceleration } = event;
+    
+    if (rotationRate && (rotationRate.alpha || rotationRate.beta || rotationRate.gamma)) {
+      eventCountRef.current++;
+      
+      if (eventCountRef.current === 1) {
+        console.log('✓ DeviceMotionEvent disparado!', rotationRate);
+      }
+    }
+  };
+
+  // Função para solicitar permissão e ativar listeners
   const requestPermission = async () => {
     try {
-      // iOS 13+ requer permissão explícita
+      console.log('🔔 Solicitando permissão de sensores...');
+
+      // iOS 13+ requer permissão explícita para DeviceOrientationEvent
       if (typeof DeviceOrientationEvent !== 'undefined' && DeviceOrientationEvent.requestPermission) {
+        console.log('📱 iOS detectado - solicitando requestPermission');
+        
         const permission = await DeviceOrientationEvent.requestPermission();
+        
+        console.log('📋 Resposta:', permission);
+        
         if (permission === 'granted') {
-          // Remover listener anterior se existir
+          // Remover listeners anteriores
           if (handlerRef.current) {
             window.removeEventListener('deviceorientation', handlerRef.current);
           }
-          // Adicionar novo listener
+          if (motionHandlerRef.current) {
+            window.removeEventListener('devicemotion', motionHandlerRef.current);
+          }
+          
+          // Adicionar listeners
           handlerRef.current = handleOrientation;
           window.addEventListener('deviceorientation', handlerRef.current);
+          
+          motionHandlerRef.current = handleMotion;
+          window.addEventListener('devicemotion', motionHandlerRef.current);
+          
           setPermissionGranted(true);
-          console.log('✓ Permissão de orientação concedida');
+          setDebugInfo('✅ Permissão concedida! Girando o celular...');
+          console.log('✅ Listeners ativados para iOS');
           return true;
         } else {
-          console.warn('Permissão de orientação negada');
+          setDebugInfo('❌ Permissão negada pelo usuário');
+          console.warn('❌ Permissão negada:', permission);
           return false;
         }
       } else {
-        // Android ou navegadores sem requestPermission - tentar adicionar listener direto
+        // Android - não requer requestPermission, ativa direto
+        console.log('🤖 Android detectado - ativando listeners direto');
+        
+        // Remover listeners anteriores
         if (handlerRef.current) {
           window.removeEventListener('deviceorientation', handlerRef.current);
         }
+        if (motionHandlerRef.current) {
+          window.removeEventListener('devicemotion', motionHandlerRef.current);
+        }
+        
+        // Adicionar listeners
         handlerRef.current = handleOrientation;
         window.addEventListener('deviceorientation', handlerRef.current);
+        
+        motionHandlerRef.current = handleMotion;
+        window.addEventListener('devicemotion', motionHandlerRef.current);
+        
         setPermissionGranted(true);
-        console.log('✓ Listener de orientação ativado');
+        setDebugInfo('✅ Listeners ativados! Girando o celular...');
+        console.log('✅ Listeners ativados para Android');
         return true;
       }
     } catch (error) {
-      console.error('Erro ao solicitar permissão de orientação:', error);
+      setDebugInfo(`❌ Erro: ${error.message}`);
+      console.error('❌ Erro ao solicitar permissão:', error);
       return false;
     }
   };
 
-  // Limpar listener ao desmontar
+  // Limpar listeners ao desmontar
   useEffect(() => {
     return () => {
       if (handlerRef.current) {
         window.removeEventListener('deviceorientation', handlerRef.current);
+      }
+      if (motionHandlerRef.current) {
+        window.removeEventListener('devicemotion', motionHandlerRef.current);
       }
     };
   }, []);
@@ -81,6 +141,7 @@ export const useOrientation = () => {
     orientation,
     isSupported,
     permissionGranted,
+    debugInfo,
     requestPermission,
   };
 };
