@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 export const useValidation = (gpsPoints, orientation) => {
   const [validation, setValidation] = useState({
@@ -11,6 +11,35 @@ export const useValidation = (gpsPoints, orientation) => {
     angleCompleted: 0,
     centerPoint: null,
   });
+
+  const initialAlphaRef = useRef(null);
+  const accumulatedRotationRef = useRef(0);
+  const lastAlphaRef = useRef(null);
+
+  // Rastrear mudança cumulativa de rotação
+  useEffect(() => {
+    const currentAlpha = orientation.alpha || 0;
+
+    // Primeira leitura - definir ângulo inicial
+    if (initialAlphaRef.current === null) {
+      initialAlphaRef.current = currentAlpha;
+      lastAlphaRef.current = currentAlpha;
+      return;
+    }
+
+    // Calcular mudança desde a última leitura
+    let delta = currentAlpha - (lastAlphaRef.current || currentAlpha);
+
+    // Tratar descontinuidade quando cruza 0°/360°
+    if (delta > 180) {
+      delta -= 360;
+    } else if (delta < -180) {
+      delta += 360;
+    }
+
+    accumulatedRotationRef.current += Math.abs(delta);
+    lastAlphaRef.current = currentAlpha;
+  }, [orientation.alpha]);
 
   useEffect(() => {
     if (gpsPoints.length < 5) {
@@ -38,10 +67,8 @@ export const useValidation = (gpsPoints, orientation) => {
     const gpsProgress = calculateAngularCoverage(gpsPoints, centerPoint);
 
     // ========== VALIDAÇÃO ORIENTAÇÃO (Giroscópio) ==========
-    // Rastrear mudanças cumulativas de ângulo
-    // Não temos histórico aqui, então usamos apenas o valor atual
-    // Na prática, você deveria manter histórico de alpha
-    const orientationProgress = orientation.alpha || 0;
+    // Usar rotação acumulada calculada
+    const orientationProgress = accumulatedRotationRef.current;
     const orientationValid = orientationProgress > 270; // Pelo menos 270° de rotação
 
     // ========== VALIDAÇÃO GERAL ==========
@@ -58,6 +85,16 @@ export const useValidation = (gpsPoints, orientation) => {
       distanceFromStart: lastDistance ? Math.round(lastDistance) : 0,
     });
   }, [gpsPoints, orientation]);
+
+  // Função para resetar rastreamento de rotação
+  useEffect(() => {
+    // Detectar quando o rastreamento é resetado (gpsPoints vazio)
+    if (gpsPoints.length === 0) {
+      initialAlphaRef.current = null;
+      accumulatedRotationRef.current = 0;
+      lastAlphaRef.current = null;
+    }
+  }, [gpsPoints.length]);
 
   return validation;
 };

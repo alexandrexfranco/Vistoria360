@@ -37,9 +37,12 @@ function App() {
     gps.resetTracking();
     gps.startTracking();
 
-    // Se for iOS, solicitar permissão de orientação
-    if (orientation.isSupported && !orientation.permissionGranted) {
-      orientation.requestPermission();
+    // Solicitar permissão de orientação (iOS 13+ e Android)
+    if (orientation.isSupported) {
+      const success = await orientation.requestPermission();
+      if (!success) {
+        console.warn('Aviso: Não foi possível ativar o sensor de orientação');
+      }
     }
   };
 
